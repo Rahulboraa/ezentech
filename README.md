@@ -28,8 +28,17 @@ A unit is **New Production** until it comes back through the Gate; from then on 
 only be dispatched after Quality approves it, Quality issues it to Production, and Production marks the
 rework complete. Serial numbers are unique across every unit and part — the server rejects a repeat.
 
-Unit IDs follow the 17-character VOLTAS format: 8-char product code, 2-digit year, month letter (A–L),
-a fixed `N`, then a 5-character serial allocated by the server.
+Unit IDs follow the 17-character VOLTAS format:
+
+| Chars | Meaning                                    | Source          |
+| ----- | ------------------------------------------ | --------------- |
+| 1–7   | VOLTAS product code                        | operator        |
+| 8     | Product variant (critical part change)     | operator        |
+| 9–10  | Year (2026 → `26`)                         | automatic       |
+| 11    | Month, Jan `A` … Dec `L`                   | automatic       |
+| 12    | Amber WAC code / manufacturing line        | station setting |
+| 13    | Time slot, 09:00 `A`, one letter per hour  | automatic       |
+| 14–17 | Random alphanumeric serial                 | server          |
 
 ## Scripts
 
@@ -37,3 +46,26 @@ a fixed `N`, then a 5-character serial allocated by the server.
 - `npm run build` — client bundle then server TypeScript
 - `npm start` — production server, also serves `client/dist`
 - `npm test` — vitest (unit ID format, gate/rework state machine)
+- `npm run seed` — station logins only (empty line)
+- `npm run seed:demo` — 4 customers and 14 units covering every gate/dispatch state
+
+## Deploy (Vercel)
+
+`vercel.json` builds the client and serves the API from `api/index.ts`.
+
+- **Root Directory: the repo root**, not `client/` — the function imports `../server/src`.
+- Framework preset: **Other**. Build command and output directory come from `vercel.json`.
+- Environment variables (all environments):
+
+  | Variable      | Value                                                                 |
+  | ------------- | --------------------------------------------------------------------- |
+  | `MONGODB_URI` | `mongodb+srv://…@cluster.mongodb.net/ezentech-assembly?retryWrites=true&w=majority` |
+  | `JWT_SECRET`  | 32+ random characters — the server refuses to boot on a placeholder    |
+
+  `PORT` is unused on serverless and Vercel sets `NODE_ENV` itself.
+
+- Atlas → Network Access must allow `0.0.0.0/0` so Vercel can connect.
+- `GET /api/health` returning `{"ok":true}` means the API and database are both up.
+- The first boot seeds the four station logins. Rotate the PINs immediately.
+
+Render is also configured (`render.yaml`) if you would rather run it as one long-lived service.

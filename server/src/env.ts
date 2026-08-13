@@ -16,6 +16,9 @@ const schema = z.object({
 
 export const env = schema.parse(process.env);
 
-if (env.NODE_ENV === 'production' && env.JWT_SECRET === 'dev-secret') {
-  throw new Error('JWT_SECRET must be set in production');
+// a placeholder copied out of .env.example would sign real sessions, so refuse
+// to boot on anything guessable
+const WEAK_SECRETS = new Set(['dev-secret', 'change-me-in-production', 'changeme', 'secret']);
+if (env.NODE_ENV === 'production' && (WEAK_SECRETS.has(env.JWT_SECRET) || env.JWT_SECRET.length < 32)) {
+  throw new Error('JWT_SECRET must be a strong, unique value in production (32+ characters)');
 }
