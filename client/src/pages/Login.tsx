@@ -111,7 +111,7 @@ export default function Login() {
               <Input
                 id="pin"
                 type="password"
-                maxLength={6}
+                maxLength={12}
                 placeholder="••••"
                 className="h-11 tracking-[0.35em]"
                 value={pin}

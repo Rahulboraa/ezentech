@@ -5,6 +5,7 @@ import {
   ChevronsUpDown,
   ClipboardList,
   DoorOpen,
+  KeyRound,
   Home,
   LogOut,
   Menu,
@@ -28,6 +29,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import ThemeToggle, { ThemeToggleRow } from '@/components/ThemeToggle'
+import ChangePinDialog from '@/components/ChangePinDialog'
 import { ROLE_LABEL } from '@/lib/format'
 import type { Role } from '@/types'
 
@@ -50,6 +52,7 @@ const NAV_MAIN: NavEntry[] = [
 const NAV_SECONDARY: NavEntry[] = [
   { to: '/customers', label: 'Customers', icon: Users2, roles: ['production'] },
   { to: '/activity', label: 'Activity Log', icon: ScrollText, roles: ['production', 'dispatch', 'gate', 'quality'] },
+  { to: '/stations', label: 'Stations', icon: KeyRound, roles: [] },
 ]
 
 export function navFor(role: Role, entries: NavEntry[]) {
@@ -121,6 +124,7 @@ function Brand() {
 function UserFooter() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const [pinOpen, setPinOpen] = useState(false)
   const initials = user?.name?.slice(0, 2).toUpperCase() ?? '?'
   return (
     <div className="border-t border-border bg-background p-3">
@@ -148,6 +152,10 @@ function UserFooter() {
             <div className="truncate text-[11px] text-muted-foreground">{user ? ROLE_LABEL[user.role] : ''}</div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => setPinOpen(true)}>
+            <KeyRound className="mr-2 size-5" />
+            Change PIN
+          </DropdownMenuItem>
           <DropdownMenuItem
             variant="destructive"
             onSelect={() => {
@@ -160,6 +168,7 @@ function UserFooter() {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <ChangePinDialog open={pinOpen} onOpenChange={setPinOpen} />
     </div>
   )
 }
@@ -173,6 +182,7 @@ const PAGE_LABELS: Record<string, string> = {
   quality: 'Quality Release',
   customers: 'Customers',
   activity: 'Activity Log',
+  stations: 'Stations',
 }
 
 function TopBar() {

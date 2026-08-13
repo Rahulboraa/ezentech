@@ -1,11 +1,34 @@
 import { z } from 'zod';
 import { PRODUCT_CODE_LENGTH, UNIT_TYPE_KEYS, type UnitType } from '../domain/units.js';
+import { ROLES, type Role } from '../models/User.js';
 
 const str = z.string().trim();
 
 export const loginSchema = z.object({
   userId: str.min(1),
   pin: str.min(1),
+});
+
+// PINs are typed on a shop-floor keypad, so keep them short but not guessable
+const pin = str.min(4, 'PIN must be at least 4 characters').max(12);
+
+export const userCreateSchema = z.object({
+  name: str.min(1, 'Station name is required'),
+  role: z.enum(ROLES as unknown as [Role, ...Role[]]),
+  pin,
+});
+
+export const userUpdateSchema = z.object({
+  name: str.min(1).optional(),
+  role: z.enum(ROLES as unknown as [Role, ...Role[]]).optional(),
+  active: z.boolean().optional(),
+});
+
+export const resetPinSchema = z.object({ pin });
+
+export const ownPinSchema = z.object({
+  currentPin: str.min(1, 'Enter your current PIN'),
+  newPin: pin,
 });
 
 export const customerSchema = z.object({

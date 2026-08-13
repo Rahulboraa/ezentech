@@ -8,6 +8,8 @@ const SEED_USERS: { name: string; role: Role; pin: string }[] = [
   { name: 'Dispatch', role: 'dispatch', pin: 'DISP' },
   { name: 'Gate', role: 'gate', pin: 'GATE' },
   { name: 'Quality', role: 'quality', pin: 'QUAL' },
+  // manages the station roster and can reset any PIN
+  { name: 'Admin', role: 'admin', pin: 'ADMN' },
 ];
 
 // Runs on every boot: creates anything missing, never resets an existing PIN.

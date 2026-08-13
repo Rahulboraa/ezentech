@@ -19,8 +19,12 @@ npm run dev               # API on :5100, client on :5173 (proxied)
 | Dispatch   | DISP | Log driver, vehicle and destination for a unit leaving         |
 | Gate       | GATE | Raise an entry request for a returned unit                     |
 | Quality    | QUAL | Approve / reject a gate request, then issue it to Production   |
+| Admin      | ADMN | Manage the station roster, reset any PIN, see every screen     |
 
-Rotate the PINs before go-live.
+**Rotate every PIN before go-live.** Each station can change its own from the
+user menu at the bottom of the sidebar; Admin can add stations, reset any PIN and
+deactivate a login from **Stations**. PINs are 4–12 characters and stored as
+bcrypt hashes.
 
 ## Flow
 
