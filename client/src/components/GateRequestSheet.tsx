@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import UnitIdCombobox from '@/components/UnitIdCombobox'
 import type { Unit } from '@/types'
 
 interface FormValues {
@@ -22,6 +23,12 @@ export default function GateRequestSheet({ open, onClose }: { open: boolean; onC
   const { register, handleSubmit, reset, watch, setValue } = useForm<FormValues>({
     defaultValues: { unitId: '', reason: '' },
   })
+
+  // the combobox writes through setValue, so register the field by hand to keep
+  // the required check
+  useEffect(() => {
+    register('unitId', { required: true })
+  }, [register])
 
   useEffect(() => {
     if (open) reset({ unitId: '', reason: '' })
@@ -38,7 +45,8 @@ export default function GateRequestSheet({ open, onClose }: { open: boolean; onC
   const { data: lookup } = useQuery({
     queryKey: ['unit', typed],
     queryFn: () => api<Unit>(`/units/${typed}`).catch(() => null),
-    enabled: open && typed.length > 3,
+    // only a complete 17-character serial can resolve, so don't 404 on every keystroke
+    enabled: open && typed.length === 17,
   })
 
   const status = (() => {
@@ -84,21 +92,12 @@ export default function GateRequestSheet({ open, onClose }: { open: boolean; onC
           <div className="flex-1 space-y-5 overflow-y-auto px-6 py-6">
             <div className="space-y-2">
               <Label htmlFor="gs-unit">Unit ID *</Label>
-              <Input id="gs-unit"
-                {...register('unitId', { required: true })}
-                list="gate-units"
-                autoComplete="off"
-                className="font-mono uppercase"
-                placeholder="Scan or pick a Unit ID…"
-                onChange={(e) => setValue('unitId', e.target.value.toUpperCase())}
+              <UnitIdCombobox
+                id="gs-unit"
+                value={watch('unitId')}
+                units={known?.rows ?? []}
+                onChange={(v) => setValue('unitId', v, { shouldValidate: true })}
               />
-              <datalist id="gate-units">
-                {(known?.rows ?? []).map((u) => (
-                  <option key={u.id} value={u.unitId}>
-                    {u.customerName}
-                  </option>
-                ))}
-              </datalist>
               {status && (
                 <p
                   className={cn(

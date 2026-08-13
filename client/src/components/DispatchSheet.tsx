@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import UnitIdCombobox from '@/components/UnitIdCombobox'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,6 +45,12 @@ export default function DispatchSheet({
   const [overwriteFor, setOverwriteFor] = useState<FormValues | null>(null)
   const { register, handleSubmit, reset, watch, setValue } = useForm<FormValues>({ defaultValues: blank })
 
+  // the combobox writes through setValue, so register the field by hand to keep
+  // the required check
+  useEffect(() => {
+    register('unitId', { required: true })
+  }, [register])
+
   useEffect(() => {
     if (open) reset({ ...blank, unitId: presetUnitId ?? '' })
   }, [open, presetUnitId, reset])
@@ -60,7 +67,8 @@ export default function DispatchSheet({
   const { data: lookup } = useQuery({
     queryKey: ['unit', typed],
     queryFn: () => api<Unit>(`/units/${typed}`).catch(() => null),
-    enabled: open && typed.length > 3,
+    // only a complete 17-character serial can resolve, so don't 404 on every keystroke
+    enabled: open && typed.length === 17,
   })
 
   const status = (() => {
@@ -122,21 +130,12 @@ export default function DispatchSheet({
             <div className="flex-1 space-y-5 overflow-y-auto px-6 py-6">
               <div className="space-y-2">
                 <Label htmlFor="ds-unit">Unit ID *</Label>
-                <Input id="ds-unit"
-                  {...register('unitId', { required: true })}
-                  list="dispatchable-units"
-                  autoComplete="off"
-                  className="font-mono uppercase"
-                  placeholder="Scan or pick a Unit ID…"
-                  onChange={(e) => setValue('unitId', e.target.value.toUpperCase())}
+                <UnitIdCombobox
+                  id="ds-unit"
+                  value={watch('unitId')}
+                  units={eligible?.rows ?? []}
+                  onChange={(v) => setValue('unitId', v, { shouldValidate: true })}
                 />
-                <datalist id="dispatchable-units">
-                  {(eligible?.rows ?? []).map((u) => (
-                    <option key={u.id} value={u.unitId}>
-                      {u.customerName}
-                    </option>
-                  ))}
-                </datalist>
                 {status && (
                   <p
                     className={cn(

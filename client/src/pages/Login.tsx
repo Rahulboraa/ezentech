@@ -65,7 +65,7 @@ export default function Login() {
         <div className="relative z-10 p-12">
           <h2 className="text-4xl font-bold tracking-tight text-white">Ezentech India</h2>
           <p className="mt-2 text-lg text-white/80">Unit Assembly Station</p>
-          <p className="mt-1 font-mono text-[12px] uppercase tracking-[0.18em] text-white/50">
+          <p className="mt-1 text-[12px] uppercase tracking-[0.18em] text-white/50">
             Air Conditioner · Serial Traceability
           </p>
         </div>
@@ -113,7 +113,7 @@ export default function Login() {
                 type="password"
                 maxLength={6}
                 placeholder="••••"
-                className="h-11 font-mono tracking-[0.35em]"
+                className="h-11 tracking-[0.35em]"
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 disabled={!selected}
