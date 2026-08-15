@@ -21,6 +21,8 @@ function fmtDate(value: Date | string | null | undefined): string {
 function unitRow(r: UnitDoc) {
   return {
     'Unit ID': r.unitId,
+    Model: r.modelName || '',
+    'Product Code': r.productCode || '',
     Type: UNIT_TYPES[r.type as UnitType]?.label ?? r.type,
     'Compressor Serial': r.compressor || '',
     'Motor Serial': r.motor || '',
@@ -28,6 +30,7 @@ function unitRow(r: UnitDoc) {
     'Heat Exchanger Serial': r.heatExchanger || '',
     'Assembled At': fmtDate(r.assembledAt),
     Dispatched: r.dispatch ? 'Yes' : 'No',
+    'Invoice Number': r.dispatch?.invoiceNumber ?? '',
     'Driver Name': r.dispatch?.driverName ?? '',
     'Vehicle Number': r.dispatch?.vehicleNumber ?? '',
     'Dispatch Location': r.dispatch?.location ?? '',

@@ -11,7 +11,10 @@ export type AuditAction =
   | 'gate-quality-approved'
   | 'gate-quality-rejected'
   | 'gate-issued'
-  | 'rework-completed';
+  | 'rework-completed'
+  | 'model-create'
+  | 'model-edit'
+  | 'model-delete';
 
 export async function logAudit(user: string, action: AuditAction, unitId = '', details = '') {
   await AuditLogModel.create({ user, action, unitId, details, at: new Date() });

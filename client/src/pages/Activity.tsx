@@ -28,6 +28,9 @@ const TONE: Record<string, 'success' | 'info' | 'warning' | 'destructive' | 'mut
   'gate-quality-rejected': 'destructive',
   'gate-issued': 'info',
   'rework-completed': 'success',
+  'model-create': 'success',
+  'model-edit': 'info',
+  'model-delete': 'destructive',
 }
 
 const RANGES = [

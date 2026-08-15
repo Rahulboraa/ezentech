@@ -3,6 +3,7 @@ import { connectDb } from '../db.js'
 import { ensureSeedUsers } from './seedUsers.js'
 import { CustomerModel } from '../models/Customer.js'
 import { UnitModel } from '../models/Unit.js'
+import { ProductModel } from '../models/ProductModel.js'
 import { AuditLogModel } from '../models/AuditLog.js'
 import { generateUnitId, partsForType, type UnitType } from '../domain/units.js'
 
@@ -23,15 +24,16 @@ const DRIVERS = [
   { driverName: 'Salim Khan', vehicleNumber: 'MH04 EF 2210', location: 'Thane — Wagle Estate' },
 ]
 
-// 7-char VOLTAS product code + its 1-char variant, per the serial spec
-const PRODUCTS = [
-  { productCode: '4011571', variant: 'A' },
-  { productCode: '4011572', variant: 'B' },
-  { productCode: '5521330', variant: 'A' },
-  { productCode: '6640210', variant: 'C' },
+// The model roster the line picks from: a name the floor recognises, plus the
+// 7-char VOLTAS product code and 1-char variant it stamps into every serial.
+const MODELS: { name: string; productCode: string; variant: string; type: UnitType }[] = [
+  { name: '1.5T 3-Star Split ODU', productCode: '4011571', variant: 'A', type: 'outdoor' },
+  { name: '1.5T 3-Star Split IDU', productCode: '4011572', variant: 'B', type: 'indoor' },
+  { name: '1.0T 5-Star Window', productCode: '5521330', variant: 'A', type: 'window' },
+  { name: '2.0T Inverter ODU', productCode: '6640210', variant: 'C', type: 'outdoor' },
 ]
 const LINE_CODES = ['K', 'L', 'M']
-const TYPES: UnitType[] = ['outdoor', 'indoor', 'window', 'outdoor', 'outdoor', 'indoor']
+const INVOICES = ['INV-2451', 'INV-2478', 'INV-2503', 'INV-2610']
 
 function daysAgo(n: number, hour = 10) {
   const d = new Date()
@@ -43,8 +45,14 @@ function daysAgo(n: number, hour = 10) {
 await connectDb()
 await ensureSeedUsers()
 
-await Promise.all([UnitModel.deleteMany({}), CustomerModel.deleteMany({}), AuditLogModel.deleteMany({})])
+await Promise.all([
+  UnitModel.deleteMany({}),
+  CustomerModel.deleteMany({}),
+  ProductModel.deleteMany({}),
+  AuditLogModel.deleteMany({}),
+])
 const customers = await CustomerModel.insertMany(CUSTOMERS)
+const models = await ProductModel.insertMany(MODELS.map((m) => ({ ...m, active: true })))
 
 const audit: { user: string; action: string; unitId: string; details: string; at: Date }[] = []
 // entries derive from unit timestamps, so clamp anything that would read as
@@ -56,10 +64,11 @@ const log = (user: string, action: string, unitId: string, details: string, at: 
 const AGES = [0, 0, 1, 2, 3, 6, 9, 14, 21, 40, 95, 210, 400, 430]
 
 const units = AGES.map((age, i) => {
-  const type = TYPES[i % TYPES.length]
+  const productModel = models[i % models.length]
+  const type = productModel.type as UnitType
   // shift-hour spread, but today's units must not land later than right now
   const assembledAt = new Date(Math.min(daysAgo(age, 9 + (i % 8)).getTime(), Date.now() - (i + 1) * 4 * 60 * 1000))
-  const { productCode, variant } = PRODUCTS[i % PRODUCTS.length]
+  const { productCode, variant } = productModel
   const lineCode = LINE_CODES[i % LINE_CODES.length]
   const customer = customers[i % customers.length]
   const serial = String(1000 + i * 7)
@@ -68,6 +77,8 @@ const units = AGES.map((age, i) => {
 
   const unit: Record<string, unknown> = {
     unitId: generateUnitId({ productCode, variant, lineCode }, assembledAt),
+    modelId: productModel._id,
+    modelName: productModel.name,
     productCode,
     variant,
     lineCode,
@@ -83,7 +94,7 @@ const units = AGES.map((age, i) => {
     dispatchLog: [],
     gateLog: [],
   }
-  log(loggedBy, 'create', unit.unitId as string, `${type} assembly logged`, assembledAt)
+  log(loggedBy, 'create', unit.unitId as string, `${productModel.name} · ${type} assembly logged`, assembledAt)
   return unit
 })
 
@@ -91,19 +102,20 @@ function unitAt(i: number) {
   return units[i] as Record<string, any>
 }
 
-// --- dispatched straight off new production
-for (const [i, d] of [
-  [3, DRIVERS[0]],
-  [5, DRIVERS[1]],
-  [9, DRIVERS[2]],
-  [12, DRIVERS[0]],
+// --- dispatched straight off new production; units 3 and 12 rode the same
+// truck, so they share a driver, a vehicle and an invoice
+for (const [i, d, invoiceNumber] of [
+  [3, DRIVERS[0], INVOICES[0]],
+  [5, DRIVERS[1], INVOICES[1]],
+  [9, DRIVERS[2], INVOICES[2]],
+  [12, DRIVERS[0], INVOICES[0]],
 ] as const) {
   const u = unitAt(i)
   const at = new Date(u.assembledAt.getTime() + 26 * 60 * 60 * 1000)
-  const entry = { ...d, dispatchedBy: 'Dispatch', dispatchedAt: at, afterRework: false }
+  const entry = { ...d, invoiceNumber, dispatchedBy: 'Dispatch', dispatchedAt: at, afterRework: false }
   u.dispatch = entry
   u.dispatchLog = [entry]
-  log('Dispatch', 'dispatch', u.unitId, `${d.driverName} · ${d.vehicleNumber} · ${d.location}`, at)
+  log('Dispatch', 'dispatch', u.unitId, `${d.driverName} · ${d.vehicleNumber} · ${d.location} · Inv ${invoiceNumber}`, at)
 }
 
 // --- gate returns in every state of the approval chain
@@ -166,7 +178,13 @@ Object.assign(gRework, {
   reworkDoneAt: daysAgo(26, 10),
 })
 reworked.gateLog = [gRework]
-const reDispatch = { ...DRIVERS[1], dispatchedBy: 'Dispatch', dispatchedAt: daysAgo(25, 9), afterRework: true }
+const reDispatch = {
+  ...DRIVERS[1],
+  invoiceNumber: INVOICES[3],
+  dispatchedBy: 'Dispatch',
+  dispatchedAt: daysAgo(25, 9),
+  afterRework: true,
+}
 reworked.dispatch = reDispatch
 reworked.dispatchLog = [reDispatch]
 log('Quality', 'gate-quality-approved', reworked.unitId, gRework.reason, gRework.decidedAt!)
@@ -199,5 +217,7 @@ for (const [i, user, text] of remarks) {
 await UnitModel.insertMany(units)
 await AuditLogModel.insertMany(audit)
 
-console.log(`demo seed: ${customers.length} customers, ${units.length} units, ${audit.length} activity entries`)
+console.log(
+  `demo seed: ${models.length} models, ${customers.length} customers, ${units.length} units, ${audit.length} activity entries`,
+)
 await mongoose.disconnect()

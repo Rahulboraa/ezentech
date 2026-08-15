@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './api'
-import type { Customer, Unit } from '@/types'
+import type { Customer, ProductModel, Unit } from '@/types'
 
 // Gate, Quality, Production and Dispatch each sit at their own screen. The
 // offline build kept them in sync with the localStorage 'storage' event; here a
@@ -50,6 +50,16 @@ export function useCustomers() {
   })
 }
 
+// The tray only offers models the line may actually run; the Models screen asks
+// for the retired ones too.
+export function useProductModels(includeInactive = false) {
+  return useQuery({
+    queryKey: ['product-models', includeInactive],
+    queryFn: () => api<ProductModel[]>(`/product-models${includeInactive ? '?includeInactive=1' : ''}`),
+    ...LIVE,
+  })
+}
+
 // Any write touches counters and at least one list, so invalidation is broad.
 export function useRefreshAll() {
   const queryClient = useQueryClient()
@@ -60,6 +70,7 @@ export function useRefreshAll() {
     queryClient.invalidateQueries({ queryKey: ['unit'] })
     queryClient.invalidateQueries({ queryKey: ['unit-stats'] })
     queryClient.invalidateQueries({ queryKey: ['customers'] })
+    queryClient.invalidateQueries({ queryKey: ['product-models'] })
     queryClient.invalidateQueries({ queryKey: ['audit'] })
   }
 }

@@ -1,11 +1,13 @@
 import { Router } from 'express';
-import { UnitModel } from '../models/Unit.js';
+import { UnitModel, type UnitDoc } from '../models/Unit.js';
 import { CustomerModel } from '../models/Customer.js';
-import { requireRole } from '../middleware/auth.js';
+import { ProductModel } from '../models/ProductModel.js';
+import { requireRole, type AuthUser } from '../middleware/auth.js';
 import { HttpError } from '../lib/httpError.js';
 import { logAudit } from '../lib/audit.js';
 import { serializeUnit } from '../lib/sanitize.js';
 import {
+  dispatchBatchSchema,
   dispatchSchema,
   gateRequestSchema,
   qualityDecisionSchema,
@@ -19,12 +21,15 @@ import {
   UNIT_TYPES,
   UNIT_TYPE_KEYS,
   generateUnitId,
+  AGE_LIMIT_DAYS,
+  isPastWarranty,
   isReadyForReworkDispatch,
   isReworkUnit,
   latestGateEntry,
-  normalizeProductCode,
   partsForType,
+  unitAgeDays,
   type PartKey,
+  type UnitType,
 } from '../domain/units.js';
 
 export const unitsRouter = Router();
@@ -67,6 +72,7 @@ unitsRouter.get('/', async (req, res) => {
     const rx = new RegExp(escapeRegex(q), 'i');
     filter.$or = [
       { unitId: rx },
+      { modelName: rx },
       { customerName: rx },
       { operator: rx },
       { loggedBy: rx },
@@ -74,6 +80,7 @@ unitsRouter.get('/', async (req, res) => {
       { 'dispatch.driverName': rx },
       { 'dispatch.vehicleNumber': rx },
       { 'dispatch.location': rx },
+      { 'dispatch.invoiceNumber': rx },
       { 'serviceRemarks.text': rx },
     ];
   }
@@ -125,7 +132,15 @@ unitsRouter.get('/:unitId', async (req, res) => {
 
 unitsRouter.post('/', requireRole('production'), async (req, res) => {
   const body = unitCreateSchema.parse(req.body);
-  const required = partsForType(body.type);
+
+  // the model is the single source of the serial's product code, variant and
+  // assembly type — the operator only scans parts
+  const productModel = await ProductModel.findById(body.modelId);
+  if (!productModel) throw new HttpError(404, 'Model not found — pick it again from the list');
+  if (!productModel.active) throw new HttpError(409, `${productModel.name} has been retired — pick a current model`);
+
+  const type = productModel.type as UnitType;
+  const required = partsForType(type);
 
   const missing = required.filter((k) => !body[k]);
   if (missing.length) {
@@ -153,8 +168,7 @@ unitsRouter.post('/', requireRole('production'), async (req, res) => {
     customerName = customer.name;
   }
 
-  const productCode = normalizeProductCode(body.productCode);
-  const variant = body.variant.toUpperCase();
+  const { productCode, variant } = productModel;
   const lineCode = body.lineCode.toUpperCase();
   const assembledAt = new Date();
 
@@ -165,10 +179,12 @@ unitsRouter.post('/', requireRole('production'), async (req, res) => {
     if (await UnitModel.exists({ unitId })) continue;
     unit = await UnitModel.create({
       unitId,
+      modelId: productModel._id,
+      modelName: productModel.name,
       productCode,
       variant,
       lineCode,
-      type: body.type,
+      type,
       compressor: body.compressor,
       motor: body.motor,
       controller: body.controller,
@@ -183,7 +199,7 @@ unitsRouter.post('/', requireRole('production'), async (req, res) => {
   }
   if (!unit) throw new HttpError(500, 'Could not allocate a unique Unit ID — try again');
 
-  await logAudit(req.user.name, 'create', unit.unitId, `${UNIT_TYPES[body.type].label} logged`);
+  await logAudit(req.user.name, 'create', unit.unitId, `${productModel.name} · ${UNIT_TYPES[type].label} logged`);
   res.status(201).json(serializeUnit(unit));
 });
 
@@ -221,40 +237,91 @@ unitsRouter.post('/:unitId/remarks', async (req, res) => {
   res.status(201).json(serializeUnit(unit));
 });
 
-unitsRouter.post('/:unitId/dispatch', requireRole('dispatch'), async (req, res) => {
-  const body = dispatchSchema.parse(req.body);
-  const unit = await findUnit(req.params.unitId);
-  const afterRework = isReworkUnit(unit);
+interface TripDetails {
+  driverName: string;
+  vehicleNumber: string;
+  location: string;
+  invoiceNumber: string;
+  overwrite: boolean;
+}
 
-  if (afterRework && !isReadyForReworkDispatch(unit) && !unit.dispatch) {
+// Raised rather than returned so the single-unit route reports it as a 409 and
+// the batch route can collect it per unit without aborting the rest of the truck.
+function assertDispatchable(unit: UnitDoc, overwrite: boolean) {
+  if (isReworkUnit(unit) && !isReadyForReworkDispatch(unit) && !unit.dispatch) {
     throw new HttpError(
       409,
       `${unit.unitId} cannot be dispatched yet — it must be approved by Quality, issued to Production, and marked reworked before Dispatch.`,
     );
   }
-  if (unit.dispatch && !body.overwrite) {
+  if (unit.dispatch && !overwrite) {
     throw new HttpError(409, `${unit.unitId} was already dispatched. Confirm to overwrite the existing details.`);
   }
+}
 
-  const vehicleNumber = body.vehicleNumber.toUpperCase();
+async function applyDispatch(unit: UnitDoc, trip: TripDetails, user: AuthUser, dispatchedAt: Date) {
+  const afterRework = isReworkUnit(unit);
   const entry = {
-    driverName: body.driverName,
-    vehicleNumber,
-    location: body.location,
-    dispatchedBy: req.user.name,
-    dispatchedAt: new Date(),
+    driverName: trip.driverName,
+    vehicleNumber: trip.vehicleNumber.toUpperCase(),
+    location: trip.location,
+    invoiceNumber: trip.invoiceNumber,
+    dispatchedBy: user.name,
+    dispatchedAt,
     afterRework,
   };
   unit.dispatchLog.push(entry);
   unit.dispatch = entry;
   await unit.save();
   await logAudit(
-    req.user.name,
+    user.name,
     afterRework ? 'dispatch-after-rework' : 'dispatch',
     unit.unitId,
-    `${body.driverName} · ${vehicleNumber} · ${body.location}`,
+    `${entry.driverName} · ${entry.vehicleNumber} · ${entry.location} · Inv ${entry.invoiceNumber}`,
   );
-  res.json(serializeUnit(unit));
+  return unit;
+}
+
+// One truck, one invoice, many units: the trip is entered once and every unit on
+// board is stamped with the same details and the same timestamp. A unit that
+// cannot leave is reported back instead of failing the whole load, so the rest
+// of the truck still goes out.
+unitsRouter.post('/dispatch-batch', requireRole('dispatch'), async (req, res) => {
+  const body = dispatchBatchSchema.parse(req.body);
+  const wanted = [...new Set(body.unitIds.map((id) => id.trim().toUpperCase()).filter(Boolean))];
+  if (!wanted.length) throw new HttpError(400, 'Scan at least one unit onto the truck');
+
+  const dispatchedAt = new Date();
+  const dispatched: ReturnType<typeof serializeUnit>[] = [];
+  const failed: { unitId: string; error: string; alreadyDispatched: boolean }[] = [];
+
+  for (const unitId of wanted) {
+    const unit = await UnitModel.findOne({ unitId });
+    if (!unit) {
+      failed.push({ unitId, error: 'No unit found with this ID', alreadyDispatched: false });
+      continue;
+    }
+    try {
+      assertDispatchable(unit, body.overwrite);
+    } catch (e) {
+      failed.push({
+        unitId,
+        error: e instanceof HttpError ? e.message : 'Could not dispatch this unit',
+        alreadyDispatched: !!unit.dispatch,
+      });
+      continue;
+    }
+    dispatched.push(serializeUnit(await applyDispatch(unit, body, req.user, dispatchedAt)));
+  }
+
+  res.status(failed.length && !dispatched.length ? 409 : 200).json({ dispatched, failed });
+});
+
+unitsRouter.post('/:unitId/dispatch', requireRole('dispatch'), async (req, res) => {
+  const body = dispatchSchema.parse(req.body);
+  const unit = await findUnit(req.params.unitId);
+  assertDispatchable(unit, body.overwrite);
+  res.json(serializeUnit(await applyDispatch(unit, body, req.user, new Date())));
 });
 
 unitsRouter.post('/:unitId/gate-request', requireRole('gate'), async (req, res) => {
@@ -263,6 +330,13 @@ unitsRouter.post('/:unitId/gate-request', requireRole('gate'), async (req, res) 
   const last = latestGateEntry(unit);
   if (last && (last.status === 'pending' || last.status === 'approved')) {
     throw new HttpError(409, 'This unit already has a request in progress.');
+  }
+  // out-of-warranty units are refused at the gate; only an admin can force one in
+  if (isPastWarranty(unit.assembledAt) && req.user.role !== 'admin') {
+    throw new HttpError(
+      409,
+      `${unit.unitId} was manufactured ${unitAgeDays(unit.assembledAt)} days ago — past the ${AGE_LIMIT_DAYS}-day warranty window. Refuse it at the gate.`,
+    );
   }
   unit.gateLog.push({
     status: 'pending',

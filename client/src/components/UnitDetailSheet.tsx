@@ -64,8 +64,11 @@ export default function UnitDetailSheet({ unitId, onClose }: { unitId: string | 
               <Field label="Customer">{unit.customerName || '—'}</Field>
               <Field label="Assembled">{fmtDate(unit.assembledAt)}</Field>
               <Field label="Operator">{unit.operator || '—'}</Field>
-              <Field label="Product code">
-                <span className="font-mono">{unit.productCode}</span>
+              <Field label="Model">
+                {unit.modelName || '—'}
+                <div className="font-mono text-[11.5px] text-muted-foreground">
+                  {unit.productCode}·{unit.variant}
+                </div>
               </Field>
             </div>
 
@@ -88,6 +91,11 @@ export default function UnitDetailSheet({ unitId, onClose }: { unitId: string | 
                 {unit.dispatch ? (
                   <div className="space-y-1">
                     {unit.dispatch.afterRework && <Badge variant="success">Dispatched after rework</Badge>}
+                    {unit.dispatch.invoiceNumber && (
+                      <div>
+                        Invoice <span className="font-mono">{unit.dispatch.invoiceNumber}</span>
+                      </div>
+                    )}
                     <div>
                       {unit.dispatch.driverName} · <span className="font-mono">{unit.dispatch.vehicleNumber}</span>
                     </div>

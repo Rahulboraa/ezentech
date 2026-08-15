@@ -8,6 +8,7 @@ import {
   isReadyForReworkDispatch,
   isReworkUnit,
   latestGateEntry,
+  isPastWarranty,
   normalizeProductCode,
   partsForType,
   unitAgeDays,
@@ -102,6 +103,24 @@ describe('gate / rework state machine', () => {
     const unit = withGate({ status: 'issued', reworkDone: true }, { status: 'pending' })
     expect(latestGateEntry(unit)?.status).toBe('pending')
     expect(canDispatch(unit)).toBe(false)
+  })
+})
+
+describe('warranty window at the gate', () => {
+  const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000)
+
+  it('lets a unit inside the window come back in', () => {
+    expect(isPastWarranty(daysAgo(364))).toBe(false)
+    expect(isPastWarranty(daysAgo(0))).toBe(false)
+  })
+
+  it('turns away anything past a year', () => {
+    expect(isPastWarranty(daysAgo(366))).toBe(true)
+    expect(isPastWarranty(daysAgo(900))).toBe(true)
+  })
+
+  it('does not block a unit with no assembly date on record', () => {
+    expect(isPastWarranty(null)).toBe(false)
   })
 })
 

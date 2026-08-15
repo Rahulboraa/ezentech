@@ -46,9 +46,23 @@ export interface DispatchEntry {
   driverName: string
   vehicleNumber: string
   location: string
+  /* shared by every unit on the same truck; blank on trips logged before invoice capture */
+  invoiceNumber: string
   dispatchedBy: string
   dispatchedAt: string
   afterRework: boolean
+}
+
+// A saved model is what the line runs: the operator picks it at changeover and
+// never touches the product code, variant or assembly type again.
+export interface ProductModel {
+  id: string
+  name: string
+  productCode: string
+  variant: string
+  type: UnitType
+  active: boolean
+  updatedAt: string
 }
 
 export interface ServiceRemark {
@@ -60,6 +74,8 @@ export interface ServiceRemark {
 export interface Unit {
   id: string
   unitId: string
+  modelId: string
+  modelName: string
   productCode: string
   variant: string
   lineCode: string

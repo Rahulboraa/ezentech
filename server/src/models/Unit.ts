@@ -15,6 +15,9 @@ const dispatchSchema = new Schema(
     driverName: { type: String, required: true },
     vehicleNumber: { type: String, required: true },
     location: { type: String, required: true },
+    // shared by every unit on the same truck; blank on trips logged before
+    // invoice numbers were captured
+    invoiceNumber: { type: String, default: '' },
     dispatchedBy: { type: String, required: true },
     dispatchedAt: { type: Date, default: Date.now },
     afterRework: { type: Boolean, default: false },
@@ -45,6 +48,10 @@ const gateEntrySchema = new Schema(
 const unitSchema = new Schema(
   {
     unitId: { type: String, required: true, unique: true, uppercase: true, trim: true },
+    // the model the line was running — the name is denormalised so a renamed or
+    // retired model never rewrites history on a unit already built
+    modelId: { type: Schema.Types.ObjectId, ref: 'ProductModel', default: null },
+    modelName: { type: String, default: '' },
     productCode: { type: String, required: true, uppercase: true, trim: true },
     // 8th character of the serial: the critical-part-change code
     variant: { type: String, default: '', uppercase: true, trim: true },

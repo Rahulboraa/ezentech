@@ -54,6 +54,13 @@ export default function GateRequestSheet({ open, onClose }: { open: boolean; onC
     if (!lookup) return { text: 'No unit found with this ID.', tone: 'err' as const }
     const gate = lookup.gate
     const who = lookup.customerName ? ` — ${lookup.customerName}` : ''
+    // out of warranty is a hard stop: the unit goes back from the gate
+    if (lookup.aged)
+      return {
+        text: `${lookup.unitId}${who} was manufactured ${lookup.ageDays} days ago — past the 365-day warranty window. Turn it away at the gate.`,
+        tone: 'err' as const,
+        blocked: true,
+      }
     if (gate?.status === 'pending')
       return { text: `${lookup.unitId}${who} is already awaiting Quality approval.`, tone: 'warn' as const }
     if (gate?.status === 'approved')
@@ -120,7 +127,7 @@ export default function GateRequestSheet({ open, onClose }: { open: boolean; onC
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={save.isPending}>
+            <Button type="submit" disabled={save.isPending || !!status?.blocked}>
               Request approval
             </Button>
           </SheetFooter>

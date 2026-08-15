@@ -35,6 +35,8 @@ export function serializeAudit(doc: Record<string, any>) {
 export interface SerializedUnit {
   id: string
   unitId: string
+  modelId: string
+  modelName: string
   productCode: string
   variant: string
   lineCode: string
@@ -68,6 +70,7 @@ export function serializeUnit(unit: UnitDoc | Record<string, any>): SerializedUn
   return {
     ...base(plain),
     customerId: plain.customerId ? String(plain.customerId) : '',
+    modelId: plain.modelId ? String(plain.modelId) : '',
     gate: latestGateEntry(plain),
     isRework: isReworkUnit(plain),
     canDispatch: canDispatch(plain),

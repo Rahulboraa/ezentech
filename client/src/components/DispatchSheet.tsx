@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { api, ApiError } from '@/lib/api'
+import { Loader2, X } from 'lucide-react'
+import { api } from '@/lib/api'
 import { LIVE, useRefreshAll, type Paged } from '@/lib/queries'
 import { fmtDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -23,14 +23,49 @@ import {
 } from '@/components/ui/alert-dialog'
 import type { Unit } from '@/types'
 
-interface FormValues {
-  unitId: string
+interface Trip {
   driverName: string
   vehicleNumber: string
   location: string
+  invoiceNumber: string
 }
 
-const blank: FormValues = { unitId: '', driverName: '', vehicleNumber: '', location: '' }
+const blankTrip: Trip = { driverName: '', vehicleNumber: '', location: '', invoiceNumber: '' }
+
+type Tone = 'ok' | 'warn' | 'err'
+
+interface Row {
+  unitId: string
+  /** null while the lookup is in flight */
+  unit: Unit | null
+  loading: boolean
+  tone: Tone
+  note: string
+}
+
+interface BatchResult {
+  dispatched: Unit[]
+  failed: { unitId: string; error: string; alreadyDispatched: boolean }[]
+}
+
+// Reads the same rework rules the Dispatch button on the table does, so a unit
+// is judged the moment it lands on the truck rather than at save time.
+function describe(unit: Unit | null): { tone: Tone; note: string } {
+  if (!unit) return { tone: 'err', note: 'No unit found with this ID' }
+  const who = unit.customerName ? ` — ${unit.customerName}` : ''
+  if (unit.dispatch) {
+    return {
+      tone: 'warn',
+      note: `Already went out with ${unit.dispatch.driverName} (${unit.dispatch.vehicleNumber}) on ${fmtDate(unit.dispatch.dispatchedAt)} — saving overwrites it`,
+    }
+  }
+  if (!unit.canDispatch) {
+    if (unit.gate?.status === 'rejected') return { tone: 'err', note: `Rejected by Quality at the Gate${who}` }
+    if (unit.gate?.status === 'issued') return { tone: 'err', note: `With Production for rework, not marked complete${who}` }
+    return { tone: 'err', note: `Still awaiting Quality approval${who}` }
+  }
+  return { tone: 'ok', note: unit.customerName || 'Ready to load' }
+}
 
 export default function DispatchSheet({
   open,
@@ -42,18 +77,12 @@ export default function DispatchSheet({
   onClose: () => void
 }) {
   const refreshAll = useRefreshAll()
-  const [overwriteFor, setOverwriteFor] = useState<FormValues | null>(null)
-  const { register, handleSubmit, reset, watch, setValue } = useForm<FormValues>({ defaultValues: blank })
-
-  // the combobox writes through setValue, so register the field by hand to keep
-  // the required check
-  useEffect(() => {
-    register('unitId', { required: true })
-  }, [register])
-
-  useEffect(() => {
-    if (open) reset({ ...blank, unitId: presetUnitId ?? '' })
-  }, [open, presetUnitId, reset])
+  const [trip, setTrip] = useState<Trip>(blankTrip)
+  const [rows, setRows] = useState<Row[]>([])
+  const [scan, setScan] = useState('')
+  const [error, setError] = useState('')
+  const [confirmOverwrite, setConfirmOverwrite] = useState<string[] | null>(null)
+  const scanRef = useRef<HTMLInputElement>(null)
 
   // the picker only offers units that are actually allowed to leave today
   const { data: eligible } = useQuery({
@@ -63,57 +92,92 @@ export default function DispatchSheet({
     ...LIVE,
   })
 
-  const typed = watch('unitId').trim().toUpperCase()
-  const { data: lookup } = useQuery({
-    queryKey: ['unit', typed],
-    queryFn: () => api<Unit>(`/units/${typed}`).catch(() => null),
-    // only a complete 17-character serial can resolve, so don't 404 on every keystroke
-    enabled: open && typed.length === 17,
-  })
+  useEffect(() => {
+    if (!open) return
+    setTrip(blankTrip)
+    setScan('')
+    setError('')
+    setRows([])
+    if (presetUnitId) void addUnit(presetUnitId)
+  }, [open, presetUnitId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const status = (() => {
-    if (!typed) return null
-    if (!lookup) return { text: 'No unit found with this ID.', tone: 'err' as const }
-    const who = lookup.customerName ? ` — ${lookup.customerName}` : ''
-    if (lookup.dispatch)
-      return {
-        text: `Already dispatched with ${lookup.dispatch.driverName} (${lookup.dispatch.vehicleNumber}) → ${lookup.dispatch.location} on ${fmtDate(lookup.dispatch.dispatchedAt)}. Saving again overwrites it.`,
-        tone: 'warn' as const,
-      }
-    if (!lookup.canDispatch) {
-      const gate = lookup.gate
-      if (gate?.status === 'rejected')
-        return { text: `${lookup.unitId}${who} was rejected by Quality at the Gate.`, tone: 'err' as const }
-      if (gate?.status === 'issued')
-        return { text: `${lookup.unitId}${who} is with Production for rework, not marked complete yet.`, tone: 'err' as const }
-      return { text: `${lookup.unitId}${who} is still awaiting Quality approval.`, tone: 'err' as const }
+  async function addUnit(raw: string) {
+    const unitId = raw.trim().toUpperCase()
+    if (!unitId) return
+    let duplicate = false
+    setRows((r) => {
+      duplicate = r.some((x) => x.unitId === unitId)
+      return duplicate ? r : [...r, { unitId, unit: null, loading: true, tone: 'ok', note: 'Looking up…' }]
+    })
+    if (duplicate) {
+      setError(`${unitId} is already on this truck`)
+      return
     }
-    return { text: `${lookup.unitId}${who} · ready to dispatch.`, tone: 'ok' as const }
-  })()
+    setError('')
+    const unit = await api<Unit>(`/units/${unitId}`).catch(() => null)
+    setRows((r) => r.map((x) => (x.unitId === unitId ? { ...x, unit, loading: false, ...describe(unit) } : x)))
+  }
+
+  function removeUnit(unitId: string) {
+    setRows((r) => r.filter((x) => x.unitId !== unitId))
+    scanRef.current?.focus()
+  }
+
+  const loadable = rows.filter((r) => !r.loading && r.tone !== 'err')
+  const blocked = rows.filter((r) => !r.loading && r.tone === 'err')
+  const overwriting = loadable.filter((r) => r.tone === 'warn')
 
   const save = useMutation({
-    mutationFn: ({ v, overwrite }: { v: FormValues; overwrite: boolean }) =>
-      api<Unit>(`/units/${v.unitId.trim().toUpperCase()}/dispatch`, {
-        body: {
-          driverName: v.driverName,
-          vehicleNumber: v.vehicleNumber,
-          location: v.location,
-          overwrite,
-        },
+    mutationFn: (overwrite: boolean) =>
+      api<BatchResult>('/units/dispatch-batch', {
+        body: { ...trip, unitIds: loadable.map((r) => r.unitId), overwrite },
       }),
-    onSuccess: (unit) => {
+    onSuccess: (result) => {
       refreshAll()
-      toast.success(unit.dispatch?.afterRework ? 'Dispatched after rework' : 'Dispatch recorded')
-      onClose()
-    },
-    onError: (e, vars) => {
-      if (e instanceof ApiError && e.status === 409 && e.message.includes('already dispatched')) {
-        setOverwriteFor(vars.v)
-        return
+      if (result.dispatched.length) {
+        const n = result.dispatched.length
+        toast.success(`${n} unit${n === 1 ? '' : 's'} dispatched on invoice ${trip.invoiceNumber}`)
       }
-      toast.error(e instanceof Error ? e.message : 'Save failed')
+      if (!result.failed.length) return onClose()
+      // whatever the server refused stays on screen with its reason
+      setRows(
+        result.failed.map((f) => ({
+          unitId: f.unitId,
+          unit: null,
+          loading: false,
+          tone: 'err' as Tone,
+          note: f.error,
+        })),
+      )
+      setError(`${result.failed.length} unit${result.failed.length === 1 ? '' : 's'} could not be dispatched.`)
     },
+    onError: (e) => setError(e instanceof Error ? e.message : 'Save failed'),
   })
+
+  function submit() {
+    if (!trip.driverName.trim()) return setError('Driver name is required')
+    if (!trip.vehicleNumber.trim()) return setError('Vehicle number is required')
+    if (!trip.location.trim()) return setError('Location is required')
+    if (!trip.invoiceNumber.trim()) return setError('Invoice number is required')
+    if (!loadable.length) return setError('Scan at least one unit onto the truck')
+    setError('')
+    if (overwriting.length) return setConfirmOverwrite(overwriting.map((r) => r.unitId))
+    save.mutate(false)
+  }
+
+  function field(key: keyof Trip, label: string, props: React.ComponentProps<typeof Input> = {}) {
+    return (
+      <div className="space-y-2">
+        <Label htmlFor={`ds-${key}`}>{label} *</Label>
+        <Input
+          id={`ds-${key}`}
+          value={trip[key]}
+          onChange={(e) => setTrip((t) => ({ ...t, [key]: e.target.value }))}
+          {...props}
+        />
+      </div>
+    )
+  }
 
   return (
     <>
@@ -121,80 +185,126 @@ export default function DispatchSheet({
         <SheetContent side="right" size="40%" className="flex w-full flex-col gap-0 p-0">
           <SheetHeader className="border-b px-6 py-5">
             <SheetTitle>Log dispatch</SheetTitle>
-            <SheetDescription>Record the driver, vehicle and destination for a unit leaving the plant.</SheetDescription>
+            <SheetDescription>
+              One truck, one invoice. Enter the trip once, then scan every unit going on board.
+            </SheetDescription>
           </SheetHeader>
-          <form
-            onSubmit={handleSubmit((v) => save.mutate({ v, overwrite: false }))}
-            className="flex min-h-0 flex-1 flex-col"
-          >
-            <div className="flex-1 space-y-5 overflow-y-auto px-6 py-6">
-              <div className="space-y-2">
-                <Label htmlFor="ds-unit">Unit ID *</Label>
-                <UnitIdCombobox
-                  id="ds-unit"
-                  value={watch('unitId')}
-                  units={eligible?.rows ?? []}
-                  onChange={(v) => setValue('unitId', v, { shouldValidate: true })}
-                />
-                {status && (
-                  <p
-                    className={cn(
-                      'rounded-md px-2.5 py-1.5 text-[12.5px]',
-                      status.tone === 'ok' && 'bg-success/10 text-success',
-                      status.tone === 'warn' && 'bg-warning/10 text-warning',
-                      status.tone === 'err' && 'bg-destructive/10 text-destructive',
-                    )}
-                  >
-                    {status.text}
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ds-driver">Driver name *</Label>
-                <Input id="ds-driver" {...register('driverName', { required: true })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ds-vehicle">Vehicle number *</Label>
-                <Input id="ds-vehicle"
-                  {...register('vehicleNumber', { required: true })}
-                  className="font-mono uppercase"
-                  placeholder="e.g. UP16 AB 1234"
-                  onChange={(e) => setValue('vehicleNumber', e.target.value.toUpperCase())}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ds-location">Location *</Label>
-                <Input id="ds-location" {...register('location', { required: true })} placeholder="Destination / delivery location" />
-              </div>
+
+          <div className="flex-1 space-y-6 overflow-y-auto px-6 py-6">
+            <div className="grid gap-4 sm:grid-cols-2">
+              {field('invoiceNumber', 'Invoice number', {
+                placeholder: 'e.g. INV-2451',
+                className: 'font-mono uppercase placeholder:normal-case',
+                onChange: (e) => setTrip((t) => ({ ...t, invoiceNumber: e.target.value.toUpperCase() })),
+              })}
+              {field('vehicleNumber', 'Vehicle number', {
+                placeholder: 'e.g. UP16 AB 1234',
+                className: 'font-mono uppercase placeholder:normal-case',
+                onChange: (e) => setTrip((t) => ({ ...t, vehicleNumber: e.target.value.toUpperCase() })),
+              })}
+              {field('driverName', 'Driver name')}
+              {field('location', 'Location', { placeholder: 'Destination / delivery location' })}
             </div>
-            <SheetFooter className="flex-row justify-end gap-2 border-t px-6 py-4">
-              <Button type="button" variant="outline" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={save.isPending}>
-                Log dispatch
-              </Button>
-            </SheetFooter>
-          </form>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="ds-scan">Units on this truck</Label>
+                <span className="rounded-full bg-muted px-2.5 py-1 text-[11.5px] font-medium tabular-nums text-muted-foreground">
+                  {loadable.length} loaded
+                  {blocked.length > 0 && ` · ${blocked.length} blocked`}
+                </span>
+              </div>
+              <UnitIdCombobox
+                id="ds-scan"
+                ref={scanRef}
+                value={scan}
+                units={(eligible?.rows ?? []).filter((u) => !rows.some((r) => r.unitId === u.unitId))}
+                placeholder="Scan a Unit ID and press Enter…"
+                onChange={(v) => setScan(v)}
+                onSelect={(v) => {
+                  void addUnit(v)
+                  setScan('')
+                }}
+              />
+              <p className="text-[11.5px] text-muted-foreground">
+                The field stays ready after each scan — keep going until the truck is full.
+              </p>
+            </div>
+
+            {rows.length > 0 && (
+              <ul className="divide-y overflow-hidden rounded-lg border">
+                {rows.map((r) => (
+                  <li key={r.unitId} className="flex items-start gap-3 px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-mono text-[12.5px]">{r.unitId}</div>
+                      <div
+                        className={cn(
+                          'text-[11.5px] leading-tight',
+                          r.tone === 'ok' && 'text-muted-foreground',
+                          r.tone === 'warn' && 'text-warning',
+                          r.tone === 'err' && 'text-destructive',
+                        )}
+                      >
+                        {r.note}
+                      </div>
+                    </div>
+                    {r.loading ? (
+                      <Loader2 className="mt-1 size-3.5 animate-spin text-muted-foreground" />
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label={`Remove ${r.unitId}`}
+                        className="text-muted-foreground"
+                        onClick={() => removeUnit(r.unitId)}
+                      >
+                        <X />
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {blocked.length > 0 && (
+              <p className="rounded-md bg-destructive/10 px-2.5 py-1.5 text-[12.5px] text-destructive">
+                {blocked.length} unit{blocked.length === 1 ? '' : 's'} cannot leave and will stay behind — remove
+                {blocked.length === 1 ? ' it' : ' them'} from the truck or clear the block first.
+              </p>
+            )}
+
+            {error && <p className="text-[12.5px] text-destructive">{error}</p>}
+          </div>
+
+          <SheetFooter className="flex-row justify-end gap-2 border-t px-6 py-4">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={submit} disabled={save.isPending || !loadable.length}>
+              {loadable.length ? `Dispatch ${loadable.length} unit${loadable.length === 1 ? '' : 's'}` : 'Dispatch'}
+            </Button>
+          </SheetFooter>
         </SheetContent>
       </Sheet>
 
-      <AlertDialog open={!!overwriteFor} onOpenChange={(o) => !o && setOverwriteFor(null)}>
+      <AlertDialog open={!!confirmOverwrite} onOpenChange={(o) => !o && setConfirmOverwrite(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>This unit was already dispatched</AlertDialogTitle>
+            <AlertDialogTitle>
+              {confirmOverwrite?.length === 1 ? 'This unit was already dispatched' : 'Some units were already dispatched'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Overwrite the existing driver, vehicle and destination with the new details? The earlier trip stays in the
-              unit's dispatch history.
+              {confirmOverwrite?.join(', ')} already left on an earlier trip. Overwrite the driver, vehicle, destination
+              and invoice with this trip's? The earlier trips stay in each unit's dispatch history.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                const v = overwriteFor!
-                setOverwriteFor(null)
-                save.mutate({ v, overwrite: true })
+                setConfirmOverwrite(null)
+                save.mutate(true)
               }}
             >
               Overwrite

@@ -15,8 +15,8 @@ npm run dev               # API on :5100, client on :5173 (proxied)
 
 | Station    | PIN  | Can do                                                       |
 | ---------- | ---- | ------------------------------------------------------------ |
-| Production | PROD | Assemble units, customers, edit/delete, mark rework complete   |
-| Dispatch   | DISP | Log driver, vehicle and destination for a unit leaving         |
+| Production | PROD | Assemble units, models, customers, edit/delete, mark rework complete |
+| Dispatch   | DISP | Load a truck: one driver, vehicle, destination and invoice for many units |
 | Gate       | GATE | Raise an entry request for a returned unit                     |
 | Quality    | QUAL | Approve / reject a gate request, then issue it to Production   |
 | Admin      | ADMN | Manage the station roster, reset any PIN, see every screen     |
@@ -25,6 +25,22 @@ npm run dev               # API on :5100, client on :5173 (proxied)
 user menu at the bottom of the sidebar; Admin can add stations, reset any PIN and
 deactivate a login from **Stations**. PINs are 4–12 characters and stored as
 bcrypt hashes.
+
+## What the operator actually does
+
+The line runs fast and one model for a whole batch, so nothing about the serial
+format is asked of the operator. A **model** — set up once on the Models screen —
+carries the product code, variant and assembly type. The operator picks it at
+changeover, then only scans part barcodes and presses **Log unit**; the Unit ID
+is composed server-side. The model, the operator name and the manufacturing line
+all survive a log and a page reload, so a shift is one selection followed by
+scanning.
+
+Dispatch works the same way round: a truck carries many units under one invoice,
+so the driver, vehicle, destination and invoice number are entered once and every
+unit scanned onto that truck is stamped with them in a single save. A unit that
+is not allowed to leave is reported back by ID and stays behind — the rest of the
+load still goes out.
 
 ## Flow
 
@@ -36,13 +52,17 @@ Unit IDs follow the 17-character VOLTAS format:
 
 | Chars | Meaning                                    | Source          |
 | ----- | ------------------------------------------ | --------------- |
-| 1–7   | VOLTAS product code                        | operator        |
-| 8     | Product variant (critical part change)     | operator        |
+| 1–7   | VOLTAS product code                        | model           |
+| 8     | Product variant (critical part change)     | model           |
 | 9–10  | Year (2026 → `26`)                         | automatic       |
 | 11    | Month, Jan `A` … Dec `L`                   | automatic       |
 | 12    | Amber WAC code / manufacturing line        | station setting |
 | 13    | Time slot, 09:00 `A`, one letter per hour  | automatic       |
 | 14–17 | Random alphanumeric serial                 | server          |
+
+Nothing in that table is typed per unit. Chars 1–8 come from the selected model,
+char 12 from the station's line setting, and the rest from the clock and the
+server.
 
 ## Scripts
 
@@ -50,8 +70,8 @@ Unit IDs follow the 17-character VOLTAS format:
 - `npm run build` — client bundle then server TypeScript
 - `npm start` — production server, also serves `client/dist`
 - `npm test` — vitest (unit ID format, gate/rework state machine)
-- `npm run seed` — station logins only (empty line)
-- `npm run seed:demo` — 4 customers and 14 units covering every gate/dispatch state
+- `npm run seed` — station logins only (empty line; add your own models before logging)
+- `npm run seed:demo` — 4 models, 4 customers and 14 units covering every gate/dispatch state
 
 ## Deploy (Vercel)
 
@@ -70,6 +90,7 @@ Unit IDs follow the 17-character VOLTAS format:
 
 - Atlas → Network Access must allow `0.0.0.0/0` so Vercel can connect.
 - `GET /api/health` returning `{"ok":true}` means the API and database are both up.
-- The first boot seeds the four station logins. Rotate the PINs immediately.
+- The first boot seeds the station logins. Rotate the PINs immediately, then add
+  the plant's models from **Models** — the assembly tray stays closed until one exists.
 
 Render is also configured (`render.yaml`) if you would rather run it as one long-lived service.

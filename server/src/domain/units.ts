@@ -101,6 +101,13 @@ export function unitAgeDays(assembledAt: Date | string | undefined | null): numb
   return Math.floor(ms / (1000 * 60 * 60 * 24));
 }
 
+// A unit older than the warranty window is turned away at the gate — it never
+// reaches Quality, exactly as the shop floor handles it today.
+export function isPastWarranty(assembledAt: Date | string | undefined | null): boolean {
+  const age = unitAgeDays(assembledAt);
+  return age !== null && age > AGE_LIMIT_DAYS;
+}
+
 export type GateStatus = 'pending' | 'approved' | 'issued' | 'rejected';
 
 export function gateStatusLabel(status: GateStatus): string {

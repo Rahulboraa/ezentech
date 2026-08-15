@@ -59,6 +59,12 @@ export default function Dispatch() {
   const columns: ColumnDef<Unit>[] = [
     { id: 'unitId', header: 'Unit ID', cell: ({ row }) => <UnitIdCell unit={row.original} /> },
     { id: 'customer', header: 'Customer', cell: ({ row }) => row.original.customerName || '—' },
+    {
+      id: 'invoice',
+      header: 'Invoice',
+      meta: { cellClass: 'font-mono text-[12px]' },
+      cell: ({ row }) => row.original.dispatch?.invoiceNumber || '—',
+    },
     { id: 'driver', header: 'Driver', cell: ({ row }) => row.original.dispatch?.driverName ?? '—' },
     {
       id: 'vehicle',
@@ -91,7 +97,7 @@ export default function Dispatch() {
     <div>
       <PageHeader
         title="Dispatch"
-        description="Record the driver, vehicle and destination as units leave the plant"
+        description="One truck, one invoice — record the trip once and load every unit going on it"
         actions={<Button onClick={() => openFor(undefined)}>Log dispatch</Button>}
       />
 
@@ -104,7 +110,7 @@ export default function Dispatch() {
 
       <div className="mb-5 flex flex-wrap gap-3">
         <Input
-          placeholder="Search unit ID, driver, vehicle or location…"
+          placeholder="Search unit ID, invoice, driver, vehicle or location…"
           value={q}
           onChange={(e) => {
             setQ(e.target.value)
@@ -165,6 +171,7 @@ export default function Dispatch() {
             </div>
             {u.dispatch && (
               <div className="px-4 text-[12px] text-muted-foreground">
+                {u.dispatch.invoiceNumber && <span className="font-mono">{u.dispatch.invoiceNumber} · </span>}
                 {u.dispatch.driverName} · {u.dispatch.vehicleNumber} · {u.dispatch.location}
               </div>
             )}

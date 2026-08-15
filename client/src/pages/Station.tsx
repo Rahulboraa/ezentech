@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PackageCheck, Users2, Wrench } from 'lucide-react'
 import type { ColumnDef } from '@tanstack/react-table'
-import { useCustomers, useUnitStats, useUnits } from '@/lib/queries'
+import { useCustomers, useProductModels, useUnitStats, useUnits } from '@/lib/queries'
 import { fmtDate } from '@/lib/format'
 import { PageHeader, SectionHeader } from '@/components/PageHeader'
 import { DataTable } from '@/components/DataTable'
@@ -18,6 +18,7 @@ import { UNIT_TYPES, UNIT_TYPE_KEYS, type Unit } from '@/types'
 
 export default function Station() {
   const { data: customers } = useCustomers()
+  const { data: models, isSuccess: modelsLoaded } = useProductModels()
   const { data: stats } = useUnitStats()
   const [detail, setDetail] = useState<string | null>(null)
   const [page, setPage] = useState(1)
@@ -30,10 +31,14 @@ export default function Station() {
     { id: 'unitId', header: 'Unit ID', cell: ({ row }) => <UnitIdCell unit={row.original} /> },
     { id: 'customer', header: 'Customer', cell: ({ row }) => row.original.customerName || '—' },
     {
-      id: 'type',
-      header: 'Type',
-      meta: { cellClass: 'font-mono text-[12px]' },
-      cell: ({ row }) => UNIT_TYPES[row.original.type].prefix,
+      id: 'model',
+      header: 'Model',
+      cell: ({ row }) => (
+        <div>
+          <div>{row.original.modelName || '—'}</div>
+          <div className="font-mono text-[11.5px] text-muted-foreground">{UNIT_TYPES[row.original.type].prefix}</div>
+        </div>
+      ),
     },
     { id: 'operator', header: 'Operator', cell: ({ row }) => row.original.operator || '—' },
     {
@@ -76,7 +81,7 @@ export default function Station() {
         ))}
       </div>
 
-      <AssemblyTray customers={customers ?? []} />
+      <AssemblyTray customers={customers ?? []} models={models ?? []} modelsLoaded={modelsLoaded} />
 
       <div className="mt-8">
         <SectionHeader

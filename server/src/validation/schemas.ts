@@ -38,10 +38,24 @@ export const customerSchema = z.object({
   address: str.default(''),
 });
 
-export const unitCreateSchema = z.object({
+export const productModelCreateSchema = z.object({
+  name: str.min(1, 'Model name is required'),
+  productCode: str
+    .toUpperCase()
+    .length(PRODUCT_CODE_LENGTH, `Enter the full ${PRODUCT_CODE_LENGTH}-character product code`)
+    .regex(/^[A-Z0-9]+$/, 'Product code may only contain letters and digits'),
+  variant: str.toUpperCase().length(1, 'Enter the 1-character product variant').regex(/^[A-Z0-9]$/, 'Variant must be a letter or digit'),
   type: z.enum(UNIT_TYPE_KEYS as [UnitType, ...UnitType[]]),
-  productCode: str.length(PRODUCT_CODE_LENGTH, `Enter the full ${PRODUCT_CODE_LENGTH}-character product code`),
-  variant: str.length(1, 'Enter the 1-character product variant'),
+});
+
+export const productModelUpdateSchema = productModelCreateSchema.partial().extend({
+  active: z.boolean().optional(),
+});
+
+// The operator never types the serial's building blocks — the model carries the
+// product code, variant and assembly type, and the line is a station setting.
+export const unitCreateSchema = z.object({
+  modelId: str.min(1, 'Pick the model this line is running'),
   lineCode: str.length(1, 'Enter the manufacturing line code'),
   operator: str.default(''),
   customerId: str.optional().nullable(),
@@ -60,11 +74,21 @@ export const remarkSchema = z.object({
   text: str.min(1, 'Enter a remark first'),
 });
 
-export const dispatchSchema = z.object({
+// One truck carries many units, so the trip — driver, vehicle, destination and
+// invoice — is entered once and stamped onto every unit on board.
+const tripFields = {
   driverName: str.min(1, 'Driver name is required'),
   vehicleNumber: str.min(1, 'Vehicle number is required'),
   location: str.min(1, 'Location is required'),
+  invoiceNumber: str.min(1, 'Invoice number is required'),
   overwrite: z.boolean().default(false),
+};
+
+export const dispatchSchema = z.object(tripFields);
+
+export const dispatchBatchSchema = z.object({
+  unitIds: z.array(str.min(1)).min(1, 'Scan at least one unit onto the truck').max(200, 'Too many units for one trip'),
+  ...tripFields,
 });
 
 export const gateRequestSchema = z.object({

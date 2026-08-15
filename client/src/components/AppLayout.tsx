@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
+  Boxes,
   ChevronRight,
   ChevronsUpDown,
   ClipboardList,
@@ -50,6 +51,7 @@ const NAV_MAIN: NavEntry[] = [
 ]
 
 const NAV_SECONDARY: NavEntry[] = [
+  { to: '/models', label: 'Models', icon: Boxes, roles: ['production'] },
   { to: '/customers', label: 'Customers', icon: Users2, roles: ['production'] },
   { to: '/activity', label: 'Activity Log', icon: ScrollText, roles: ['production', 'dispatch', 'gate', 'quality'] },
   { to: '/stations', label: 'Stations', icon: KeyRound, roles: [] },
@@ -181,6 +183,7 @@ const PAGE_LABELS: Record<string, string> = {
   gate: 'Gate Entry',
   quality: 'Quality Release',
   customers: 'Customers',
+  models: 'Models',
   activity: 'Activity Log',
   stations: 'Stations',
 }

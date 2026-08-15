@@ -8,6 +8,7 @@ import Dispatch from '@/pages/Dispatch'
 import Gate from '@/pages/Gate'
 import Quality from '@/pages/Quality'
 import Customers from '@/pages/Customers'
+import Models from '@/pages/Models'
 import Activity from '@/pages/Activity'
 import Stations from '@/pages/Stations'
 import { useAuth } from '@/lib/auth'
@@ -34,6 +35,7 @@ export default function App() {
             <Route path="/station" element={<Station />} />
             <Route path="/units" element={<Units />} />
             <Route path="/customers" element={<Customers />} />
+            <Route path="/models" element={<Models />} />
           </Route>
           <Route element={<RequireRole roles={[]} />}>
             <Route path="/stations" element={<Stations />} />

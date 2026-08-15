@@ -12,6 +12,7 @@ export default function UnitIdCombobox({
   value,
   units,
   onChange,
+  onSelect,
   placeholder = 'Scan or pick a Unit ID…',
   ...inputProps
 }: {
@@ -19,9 +20,17 @@ export default function UnitIdCombobox({
   value: string
   units: Unit[]
   onChange: (value: string) => void
+  /** Fired once the ID is committed — the scanner's Enter, or a pick from the list. */
+  onSelect?: (value: string) => void
   placeholder?: string
-} & Omit<React.ComponentProps<typeof Input>, 'value' | 'onChange' | 'id'>) {
+} & Omit<React.ComponentProps<typeof Input>, 'value' | 'onChange' | 'onSelect' | 'id'>) {
   const [open, setOpen] = useState(false)
+
+  function commit(id: string) {
+    onChange(id)
+    onSelect?.(id)
+    setOpen(false)
+  }
 
   const needle = value.trim().toUpperCase()
   const matches = units
@@ -38,12 +47,20 @@ export default function UnitIdCombobox({
           value={value}
           autoComplete="off"
           placeholder={placeholder}
-          className={cn('font-mono uppercase', inputProps.className)}
+          // uppercase without shouting the placeholder back at the operator
+          className={cn('font-mono uppercase placeholder:normal-case', inputProps.className)}
           onFocus={() => setOpen(true)}
           onBlur={() => window.setTimeout(() => setOpen(false), 120)}
           onChange={(e) => {
             onChange(e.target.value.toUpperCase())
             setOpen(true)
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter' || !onSelect) return
+            e.preventDefault()
+            // one highlighted match means the gun scanned a partial the operator
+            // clearly meant; otherwise take what is in the field
+            commit(matches.length === 1 ? matches[0].unitId : e.currentTarget.value.trim().toUpperCase())
           }}
         />
       </PopoverAnchor>
@@ -60,10 +77,7 @@ export default function UnitIdCombobox({
                 <CommandItem
                   key={u.id}
                   value={u.unitId}
-                  onSelect={() => {
-                    onChange(u.unitId)
-                    setOpen(false)
-                  }}
+                  onSelect={() => commit(u.unitId)}
                 >
                   <span className="font-mono text-[12.5px]">{u.unitId}</span>
                   {u.customerName && (
