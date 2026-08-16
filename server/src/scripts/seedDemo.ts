@@ -5,6 +5,8 @@ import { CustomerModel } from '../models/Customer.js'
 import { UnitModel } from '../models/Unit.js'
 import { ProductModel } from '../models/ProductModel.js'
 import { AuditLogModel } from '../models/AuditLog.js'
+import { ComplaintModel } from '../models/Complaint.js'
+import { UserModel } from '../models/User.js'
 import { generateUnitId, partsForType, type UnitType } from '../domain/units.js'
 
 // Demo fixtures for walking through the app — wipes units, customers and the
@@ -45,11 +47,14 @@ function daysAgo(n: number, hour = 10) {
 await connectDb()
 await ensureSeedUsers()
 
+// customer logins point at the demo customers, so they go with the data they own
 await Promise.all([
   UnitModel.deleteMany({}),
   CustomerModel.deleteMany({}),
   ProductModel.deleteMany({}),
   AuditLogModel.deleteMany({}),
+  ComplaintModel.deleteMany({}),
+  UserModel.deleteMany({ role: 'customer' }),
 ])
 const customers = await CustomerModel.insertMany(CUSTOMERS)
 const models = await ProductModel.insertMany(MODELS.map((m) => ({ ...m, active: true })))
