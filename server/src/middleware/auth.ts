@@ -7,6 +7,8 @@ export interface AuthUser {
   id: string;
   name: string;
   role: Role;
+  // set only on customer logins — scopes every list to that account
+  customerId?: string;
 }
 
 declare module 'express-serve-static-core' {
@@ -25,7 +27,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
   try {
     const payload = jwt.verify(token, env.JWT_SECRET) as AuthUser & { iat: number; exp: number };
-    req.user = { id: payload.id, name: payload.name, role: payload.role };
+    req.user = { id: payload.id, name: payload.name, role: payload.role, customerId: payload.customerId };
     // sliding session — a shift never gets logged out mid-scan
     res.setHeader('x-refresh-token', signToken(req.user));
     next();

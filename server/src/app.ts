@@ -10,6 +10,7 @@ import { unitsRouter } from './routes/units.js';
 import { productModelsRouter } from './routes/productModels.js';
 import { auditRouter } from './routes/audit.js';
 import { usersRouter } from './routes/users.js';
+import { complaintsRouter } from './routes/complaints.js';
 import { reportsRouter } from './routes/reports.js';
 
 function resolveClientDist() {
@@ -32,6 +33,7 @@ export function createApp() {
   app.use('/api/units', requireAuth, unitsRouter);
   app.use('/api/product-models', requireAuth, productModelsRouter);
   app.use('/api/users', requireAuth, usersRouter);
+  app.use('/api/complaints', requireAuth, complaintsRouter);
   app.use('/api/audit', requireAuth, auditRouter);
   app.use('/api/reports', requireAuth, reportsRouter);
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));

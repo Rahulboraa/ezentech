@@ -19,6 +19,7 @@ npm run dev               # API on :5100, client on :5173 (proxied)
 | Dispatch   | DISP | Load a truck: one driver, vehicle, destination and invoice for many units |
 | Gate       | GATE | Raise an entry request for a returned unit                     |
 | Quality    | QUAL | Approve / reject a gate request, then issue it to Production   |
+| Customer   | —    | Sees only its own machines, their status, and raises complaints |
 | Admin      | ADMN | Manage the station roster, reset any PIN, see every screen     |
 
 **Rotate every PIN before go-live.** Each station can change its own from the
@@ -43,6 +44,10 @@ is not allowed to leave is reported back by ID and stays behind — the rest of 
 load still goes out.
 
 ## Flow
+
+A customer reports a problem against a serial from its own login. The gate receives the machine, raises the entry
+request, and the usual cycle follows. Anything past the 365-day warranty window is refused — the customer cannot
+report it and the gate cannot take it in.
 
 A unit is **New Production** until it comes back through the Gate; from then on it is **Rework** and may
 only be dispatched after Quality approves it, Quality issues it to Production, and Production marks the

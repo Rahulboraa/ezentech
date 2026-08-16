@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from '@/lib/utils'
 import type { AuthUser, Role } from '@/types'
 
-const ROLE_ORDER: Role[] = ['production', 'dispatch', 'gate', 'quality', 'admin']
+const ROLE_ORDER: Role[] = ['production', 'dispatch', 'gate', 'quality', 'customer', 'admin']
 
 export default function Login() {
   const { user, login, logoutMessage } = useAuth()

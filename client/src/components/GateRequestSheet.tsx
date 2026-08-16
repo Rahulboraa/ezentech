@@ -18,7 +18,15 @@ interface FormValues {
   reason: string
 }
 
-export default function GateRequestSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function GateRequestSheet({
+  open,
+  presetUnitId,
+  onClose,
+}: {
+  open: boolean
+  presetUnitId?: string
+  onClose: () => void
+}) {
   const refreshAll = useRefreshAll()
   const { register, handleSubmit, reset, watch, setValue } = useForm<FormValues>({
     defaultValues: { unitId: '', reason: '' },
@@ -31,8 +39,8 @@ export default function GateRequestSheet({ open, onClose }: { open: boolean; onC
   }, [register])
 
   useEffect(() => {
-    if (open) reset({ unitId: '', reason: '' })
-  }, [open, reset])
+    if (open) reset({ unitId: presetUnitId ?? '', reason: '' })
+  }, [open, presetUnitId, reset])
 
   const { data: known } = useQuery({
     queryKey: ['units', 'roster'],

@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import CustomerCombobox from '@/components/CustomerCombobox'
+import { useCustomers } from '@/lib/queries'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import type { Role } from '@/types'
 import type { Station } from '@/pages/Stations'
@@ -29,13 +31,16 @@ export default function StationSheet({
   const [name, setName] = useState('')
   const [role, setRole] = useState<Role>('production')
   const [pin, setPin] = useState('')
+  const [customerId, setCustomerId] = useState('none')
   const [error, setError] = useState('')
+  const { data: customers } = useCustomers()
 
   useEffect(() => {
     if (open) {
       setName(station?.name ?? '')
       setRole(station?.role ?? 'production')
       setPin('')
+      setCustomerId('none')
       setError('')
     }
   }, [open, station])
@@ -44,7 +49,9 @@ export default function StationSheet({
     mutationFn: () =>
       station
         ? api(`/users/${station.id}/pin`, { method: 'PATCH', body: { pin } })
-        : api('/users', { body: { name, role, pin } }),
+        : api('/users', {
+            body: { name, role, pin, customerId: role === 'customer' && customerId !== 'none' ? customerId : null },
+          }),
     onSuccess: () => {
       onSaved()
       toast.success(station ? `PIN reset for ${station.name}` : `${name} added`)
@@ -55,6 +62,8 @@ export default function StationSheet({
 
   function submit() {
     if (!station && !name.trim()) return setError('Station name is required')
+    if (!station && role === 'customer' && customerId === 'none')
+      return setError('Pick the customer account this login belongs to')
     if (pin.trim().length < 4) return setError('PIN must be at least 4 characters')
     setError('')
     save.mutate()
@@ -97,9 +106,21 @@ export default function StationSheet({
                   </SelectContent>
                 </Select>
                 <p className="text-[11.5px] text-muted-foreground">
-                  Admin manages stations; the rest only see their own screen.
+                  Admin manages stations; a customer login only sees its own machines.
                 </p>
               </div>
+
+              {role === 'customer' && (
+                <div className="space-y-2">
+                  <Label htmlFor="st-customer">Customer account *</Label>
+                  <CustomerCombobox
+                    id="st-customer"
+                    value={customerId}
+                    customers={customers ?? []}
+                    onChange={setCustomerId}
+                  />
+                </div>
+              )}
             </>
           )}
 

@@ -13,6 +13,7 @@ function serialize(u: Record<string, any>) {
     name: u.name,
     role: u.role,
     active: u.active,
+    customerId: u.customerId ? String(u.customerId) : '',
     updatedAt: u.updatedAt,
   };
 }
@@ -40,10 +41,14 @@ usersRouter.get('/', async (_req, res) => {
 usersRouter.post('/', async (req, res) => {
   const body = userCreateSchema.parse(req.body);
   if (await UserModel.exists({ name: body.name })) throw new HttpError(409, 'A station with that name already exists');
+  if (body.role === 'customer' && !body.customerId) {
+    throw new HttpError(400, 'Pick the customer account this login belongs to');
+  }
   const user = await UserModel.create({
     name: body.name,
     role: body.role,
     pinHash: await bcrypt.hash(body.pin.toUpperCase(), 10),
+    customerId: body.role === 'customer' ? body.customerId : null,
     active: true,
   });
   res.status(201).json(serialize(user.toObject()));

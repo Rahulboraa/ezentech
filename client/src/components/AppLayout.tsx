@@ -48,6 +48,7 @@ const NAV_MAIN: NavEntry[] = [
   { to: '/dispatch', label: 'Dispatch', icon: Truck, roles: ['dispatch'] },
   { to: '/gate', label: 'Gate Entry', icon: DoorOpen, roles: ['gate'] },
   { to: '/quality', label: 'Quality Release', icon: ShieldCheck, roles: ['quality'] },
+  { to: '/my-machines', label: 'My Machines', icon: PackageCheck, roles: ['customer'] },
 ]
 
 const NAV_SECONDARY: NavEntry[] = [
@@ -185,6 +186,7 @@ const PAGE_LABELS: Record<string, string> = {
   customers: 'Customers',
   models: 'Models',
   activity: 'Activity Log',
+  'my-machines': 'My Machines',
   stations: 'Stations',
 }
 

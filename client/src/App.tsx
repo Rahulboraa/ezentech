@@ -11,26 +11,39 @@ import Customers from '@/pages/Customers'
 import Models from '@/pages/Models'
 import Activity from '@/pages/Activity'
 import Stations from '@/pages/Stations'
+import MyMachines from '@/pages/MyMachines'
 import { useAuth } from '@/lib/auth'
 import type { Role } from '@/types'
+
+// A customer never sees the shop-floor dashboard — its home is its own machines.
+export function homeFor(role: Role) {
+  return role === 'customer' ? '/my-machines' : '/'
+}
 
 function RequireRole({ roles }: { roles: Role[] }) {
   const { user, loading } = useAuth()
   if (loading)
     return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading…</div>
   if (!user) return <Navigate to="/login" replace />
-  if (user.role !== 'admin' && !roles.includes(user.role)) return <Navigate to="/" replace />
+  if (user.role !== 'admin' && !roles.includes(user.role)) return <Navigate to={homeFor(user.role)} replace />
   return <Outlet />
+}
+
+function Home() {
+  const { user } = useAuth()
+  return user?.role === 'customer' ? <Navigate to="/my-machines" replace /> : <Dashboard />
 }
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route element={<RequireRole roles={['production', 'dispatch', 'gate', 'quality']} />}>
+      <Route element={<RequireRole roles={['production', 'dispatch', 'gate', 'quality', 'customer']} />}>
         <Route element={<AppLayout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="/activity" element={<Activity />} />
+          <Route index element={<Home />} />
+          <Route element={<RequireRole roles={['production', 'dispatch', 'gate', 'quality']} />}>
+            <Route path="/activity" element={<Activity />} />
+          </Route>
           <Route element={<RequireRole roles={['production']} />}>
             <Route path="/station" element={<Station />} />
             <Route path="/units" element={<Units />} />
@@ -39,6 +52,9 @@ export default function App() {
           </Route>
           <Route element={<RequireRole roles={[]} />}>
             <Route path="/stations" element={<Stations />} />
+          </Route>
+          <Route element={<RequireRole roles={['customer']} />}>
+            <Route path="/my-machines" element={<MyMachines />} />
           </Route>
           <Route element={<RequireRole roles={['dispatch']} />}>
             <Route path="/dispatch" element={<Dispatch />} />

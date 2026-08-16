@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { DataTable } from '@/components/DataTable'
 import EmptyState from '@/components/EmptyState'
 import RowActions from '@/components/RowActions'
+import ComplaintsPanel from '@/components/ComplaintsPanel'
 import GateRequestSheet from '@/components/GateRequestSheet'
 import GateStatusBadge from '@/components/GateStatusBadge'
 import StatCard from '@/components/StatCard'
@@ -30,6 +31,7 @@ export default function Gate() {
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(20)
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [presetUnitId, setPresetUnitId] = useState<string | undefined>()
   const [detail, setDetail] = useState<string | null>(null)
 
   const params = new URLSearchParams({ page: String(page), limit: String(limit), tab })
@@ -78,7 +80,23 @@ export default function Gate() {
       <PageHeader
         title="Gate Entry"
         description="Log units arriving back at the gate so Quality can clear them"
-        actions={<Button onClick={() => setSheetOpen(true)}>New entry request</Button>}
+        actions={
+          <Button
+            onClick={() => {
+              setPresetUnitId(undefined)
+              setSheetOpen(true)
+            }}
+          >
+            New entry request
+          </Button>
+        }
+      />
+
+      <ComplaintsPanel
+        onReceive={(unitId) => {
+          setPresetUnitId(unitId)
+          setSheetOpen(true)
+        }}
       />
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -156,7 +174,7 @@ export default function Gate() {
         )}
       />
 
-      <GateRequestSheet open={sheetOpen} onClose={() => setSheetOpen(false)} />
+      <GateRequestSheet open={sheetOpen} presetUnitId={presetUnitId} onClose={() => setSheetOpen(false)} />
       <UnitDetailSheet unitId={detail} onClose={() => setDetail(null)} />
     </div>
   )

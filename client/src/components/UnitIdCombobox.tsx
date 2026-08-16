@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
@@ -25,6 +25,7 @@ export default function UnitIdCombobox({
   placeholder?: string
 } & Omit<React.ComponentProps<typeof Input>, 'value' | 'onChange' | 'onSelect' | 'id'>) {
   const [open, setOpen] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   function commit(id: string) {
     onChange(id)
@@ -38,11 +39,14 @@ export default function UnitIdCombobox({
     .slice(0, 8)
   const exact = matches.length === 1 && matches[0].unitId === needle
 
+  // open on focus even before the list has loaded — the empty state explains
+  // itself, and a scanner that fills the field exactly closes it again
   return (
-    <Popover open={open && matches.length > 0 && !exact} onOpenChange={setOpen}>
+    <Popover open={open && !exact} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
         <Input
           {...inputProps}
+          ref={inputRef}
           id={id}
           value={value}
           autoComplete="off"
@@ -50,7 +54,6 @@ export default function UnitIdCombobox({
           // uppercase without shouting the placeholder back at the operator
           className={cn('font-mono uppercase placeholder:normal-case', inputProps.className)}
           onFocus={() => setOpen(true)}
-          onBlur={() => window.setTimeout(() => setOpen(false), 120)}
           onChange={(e) => {
             onChange(e.target.value.toUpperCase())
             setOpen(true)
@@ -67,7 +70,13 @@ export default function UnitIdCombobox({
       <PopoverContent
         align="start"
         className="w-[var(--radix-popover-trigger-width)] p-0"
+        // the field keeps the caret and the keystrokes; the list is only a picker
         onOpenAutoFocus={(e) => e.preventDefault()}
+        onCloseAutoFocus={(e) => e.preventDefault()}
+        // clicking the field itself is not "outside" — it is how the list opens
+        onPointerDownOutside={(e) => {
+          if (e.target instanceof Node && inputRef.current?.contains(e.target)) e.preventDefault()
+        }}
       >
         <Command shouldFilter={false}>
           <CommandList>

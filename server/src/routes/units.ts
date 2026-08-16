@@ -68,6 +68,8 @@ unitsRouter.get('/', async (req, res) => {
   const limit = Math.min(Math.max(parseInt(String(req.query.limit)) || 20, 1), 200);
 
   const filter: Record<string, unknown> = {};
+  // a customer login only ever lists its own machines
+  if (req.user.role === 'customer') filter.customerId = req.user.customerId ?? null;
   if (q) {
     const rx = new RegExp(escapeRegex(q), 'i');
     filter.$or = [
@@ -127,6 +129,9 @@ unitsRouter.get('/serial-lookup', async (req, res) => {
 
 unitsRouter.get('/:unitId', async (req, res) => {
   const unit = await findUnit(req.params.unitId);
+  if (req.user.role === 'customer' && String(unit.customerId ?? '') !== (req.user.customerId ?? '')) {
+    throw new HttpError(404, 'No machine found with this serial number');
+  }
   res.json(serializeUnit(unit));
 });
 

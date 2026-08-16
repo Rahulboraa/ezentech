@@ -14,7 +14,9 @@ export type AuditAction =
   | 'rework-completed'
   | 'model-create'
   | 'model-edit'
-  | 'model-delete';
+  | 'model-delete'
+  | 'complaint-raised'
+  | 'complaint-received';
 
 export async function logAudit(user: string, action: AuditAction, unitId = '', details = '') {
   await AuditLogModel.create({ user, action, unitId, details, at: new Date() });

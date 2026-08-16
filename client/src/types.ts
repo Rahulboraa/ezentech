@@ -1,4 +1,4 @@
-export const ROLES = ['production', 'dispatch', 'gate', 'quality', 'admin'] as const
+export const ROLES = ['production', 'dispatch', 'gate', 'quality', 'customer', 'admin'] as const
 export type Role = (typeof ROLES)[number]
 
 export interface AuthUser {
@@ -108,6 +108,19 @@ export interface Customer {
   phone: string
   city: string
   address: string
+}
+
+export interface Complaint {
+  id: string
+  unitId: string
+  customerId: string
+  customerName: string
+  problem: string
+  status: 'open' | 'received' | 'closed'
+  raisedBy: string
+  raisedAt: string
+  receivedBy: string
+  receivedAt: string | null
 }
 
 export interface AuditRow {

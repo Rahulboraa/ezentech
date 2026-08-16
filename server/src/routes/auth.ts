@@ -21,7 +21,12 @@ authRouter.post('/login', loginLimiter, async (req, res) => {
   if (!user || !(await bcrypt.compare(pin.toUpperCase(), user.pinHash))) {
     return res.status(401).json({ error: 'Incorrect PIN. Try again.' });
   }
-  const authUser: AuthUser = { id: String(user._id), name: user.name, role: user.role };
+  const authUser: AuthUser = {
+    id: String(user._id),
+    name: user.name,
+    role: user.role,
+    ...(user.customerId ? { customerId: String(user.customerId) } : {}),
+  };
   res.json({ token: signToken(authUser), user: authUser });
 });
 

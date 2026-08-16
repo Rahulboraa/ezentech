@@ -16,6 +16,8 @@ export const userCreateSchema = z.object({
   name: str.min(1, 'Station name is required'),
   role: z.enum(ROLES as unknown as [Role, ...Role[]]),
   pin,
+  // required for customer logins so the account can be scoped to its own machines
+  customerId: str.optional().nullable(),
 });
 
 export const userUpdateSchema = z.object({
@@ -68,6 +70,11 @@ export const unitCreateSchema = z.object({
 export const unitEditSchema = z.object({
   customerId: str.optional().nullable(),
   operator: str.default(''),
+});
+
+export const complaintCreateSchema = z.object({
+  unitId: str.min(1, 'Enter the serial number printed on the machine'),
+  problem: str.min(3, 'Describe the problem'),
 });
 
 export const remarkSchema = z.object({
